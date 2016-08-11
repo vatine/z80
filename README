@@ -1,0 +1,83 @@
+Written 2004 by Ingvar Mattsson <ingvar@hexapodia.net>
+
+This is a Z80 assembler. Input files are named <filename>.l80.
+
+This code is in the public domain.
+
+Input file format is (essentially) a lispified Z80 assembler notation,
+mostly driven by macros. At the moment, the error checking is kind-of
+vague, so should any input data be in too bad a shape, it will
+indeterministically do an assortment of things.
+
+There are some "virtual instructions" available.
+
+ - ORG sets the "where will this instruction end up" parameter.
+ - DB deposits one or more bytes at "the current position"
+ - DSTR deposits the (ASCII) bytes (and only the ASCII bytes) corresponding to
+  	a given string. Some 8-bit characters may end up actually working,
+  	but taht hasn't been designed for.
+ - LABEL creates a label (for data load or jumping to). The label name can be
+  	used instead of a word immediate anywhere and can be used as a jump
+  	target for JR.
+ - JMP is the generic jump instruction, it will turn into JP or JR as
+  	necessary and will use minimal space.
+
+In general, where there are two or more ways of expressing an instruction
+in Z80 machine code, this assembler will generate the shortest one.
+
+This assembler understands (in f (c)) and will generate the right code.
+
+THE ASSEMBLE FUNCTION
+
+The ASSEMBLE function takes an infile designator as its required
+argument.  It also accepts two keyword arguments, :FILETYPE and
+:OUTPUT-EXTRAS, these are passed on to the ASSEMBLER-OUTPUT generic
+function. The first (:FILETYPE) determines what method will be called
+and teh second is a method-specific set of extra data (for SNA, that
+is the contents of the header or, rather, the contents of anything
+non-zero in the header).
+
+SYNTAX
+
+The general syntax is:
+(mmn target source)
+
+For instructions that have conditionals (CALL, RET, JP, JR), the syntax is:
+(mmn <(flags flag)> destination)
+
+In most places where a 16-bit immediate can be placed, you can use a
+label reference.
+
+Indirection is done by placing the register/immediate in parentheses.
+Thus:
+ hl     Contents of HL
+(hl)    Contents of memory with the address in HL
+(+ ix d) Contents of memory with the address of IX+d (indirect indexed)
+
+INTERNALS
+
+All "user-visible" instructions are implemented as CL macros,
+expanding into a call to ASM-FUN. This function does some checking of
+arguments (extracting conditionals and the like) and then builds an
+ASMINSTR object with the instruction, source, target and possibly flag
+specification. This object also contains the range of "address for
+first byte" (this is usually a range of 1 bye, so lowest possible and
+highest possible address is the same, but in code that uses the
+virtual JMP instruction, this may vary). This function also takes care
+to associate labels with instructions.
+
+When the whole program has been loaded and parsed, the assembler will
+styart by sorting code from lowest possible start address to highest
+possible start address. It will then go throuhg and convert JMPs to JR
+or JP as needed, until it has converted all of them. It has *not* been
+proven that this process terminates, but...
+
+After that is done, it will create a 64 K element array and get the
+actual machine code for the symbolic instruction and write it into
+this array. All bytes that have been left untouched will have the
+value -1 instead of a value in the range 0-255.
+
+Once this is done, it will open an output file and call the function
+ASSEMBLER-OUTPUT with the array, the output file stream and the output
+format specifier (so the relevant output method can be chosen).
+
