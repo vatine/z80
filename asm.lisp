@@ -366,7 +366,17 @@
 
 
 (defmethod emit-instruction (instr (i (eql 'and)))
-  )
+  (typecase (source instr)
+    (memory-indirect (let ((base #xA6)
+			   (prefix (prefix (source instr))))
+		       (if prefix
+			   (vector prefix base (low-byte (source instr)))
+			 (vector base))))
+    (immediate (vector #xE6 (low-byte (source instr))))
+    (register (let ((base #xA0)
+		    (reg (compute-register (source instr) t)))
+		(vector (logior base reg))))))
+
 
 (defmethod emit-instruction (instr (i (eql 'bit)))
   (let ((pos (value (target instr)))
